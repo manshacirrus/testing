@@ -45,7 +45,7 @@
             <br>
             <label for="job_id">Select Job Description:</label>
             <select name="job_id" id="job_id">
-                {% for job in job_descriptions %}
+                {% for job in jobs %}
                     <option value="{{ job['_id'] }}">{{ job['job_post'] }} - {{ job['company_name'] }}</option>
                 {% endfor %}
             </select>
@@ -63,5 +63,6 @@
                 </ul>
             {% endif %}
         {% endwith %}
-    </body>
-    </html>
+    </main>
+</body>
+</html>
