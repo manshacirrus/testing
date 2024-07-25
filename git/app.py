@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for, flash, session
+from flask import Flask, request, render_template, redirect, url_for, flash
 from werkzeug.utils import secure_filename
 import os
 import io
@@ -21,7 +21,6 @@ mongo = PyMongo(app)
 # Initialize MongoDB collections
 resumeFetchedData = mongo.db.resumeFetchedData
 JOBS = mongo.db.JOBS
-users = mongo.db.IRS_USERS  # Collection for user management
 
 # File upload paths
 UPLOAD_FOLDER_RESUME = 'static/uploaded_resumes'
@@ -54,6 +53,7 @@ class ResumeModel:
         for ent in doc.ents:
             if ent.label_ in entities:
                 entities[ent.label_].append(ent.text)
+        print("Parsed Resume Entities:", entities)  # Print resume entities
         return entities
 
 class JDModel:
@@ -72,6 +72,7 @@ class JDModel:
         for ent in doc.ents:
             if ent.label_ in entities:
                 entities[ent.label_].append(ent.text)
+        print("Parsed Job Description Entities:", entities)  # Print job description entities
         return entities
 
 class Matching:
@@ -89,6 +90,7 @@ class Matching:
             resume_data = self.resumeFetchedData.find_one({"_id": ObjectId(self.resume_id)})
             if not resume_data:
                 raise ValueError("Resume data not found")
+            print("Retrieved Resume Data:", resume_data)  # Print resume data
             return resume_data
         except Exception as e:
             print(f"Error retrieving resume data: {e}")
@@ -99,6 +101,7 @@ class Matching:
             job_data = self.JOBS.find_one({"_id": ObjectId(self.job_id)})
             if not job_data:
                 raise ValueError("Job data not found")
+            print("Retrieved Job Data:", job_data)  # Print job description data
             return job_data
         except Exception as e:
             print(f"Error retrieving job data: {e}")
@@ -142,6 +145,7 @@ class Matching:
         else:
             flash('No job description data to process', 'warning')
 
+        print("Parsed Job Description Data:", dic_jd)  # Print job description parsed data
         return dic_jd
 
     def calculate_experience(self, experience_list):
@@ -158,18 +162,10 @@ class Matching:
                 total_experience += round(years, 2)
             except Exception as e:
                 print(f"Error converting experience entry '{entry}': {e}")
+        print("Total Experience Calculated:", total_experience)  # Print calculated total experience
         return total_experience
 
-   
-
     def extract_experience(experience_str):
-      match = re.search(r'\d+', experience_str)  # Find the first occurrence of one or more digits
-      if match:
-         return float(match.group(0))  # Convert the found digits to float
-      return 0.0  # Return 0 if no numeric part is found
-
-    def extract_experience(self, experience_str):
-        """Extracts the numeric part from a string with years of experience."""
         match = re.search(r'\d+', experience_str)  # Find the first occurrence of one or more digits
         if match:
             return float(match.group(0))  # Convert the found digits to float
@@ -207,7 +203,11 @@ class Matching:
         jdpost_similarity *= 0.3
         experience_similarity *= 0.2
 
+        print("Job Post Similarity:", jdpost_similarity)  # Print job post similarity
+        print("Experience Similarity:", experience_similarity)  # Print experience similarity
+
         return jdpost_similarity, experience_similarity
+
     def compare_skills(self, resume_skills, job_skills):
         new_resume_skills = []
         count = 0
@@ -232,9 +232,9 @@ class Matching:
         else:
             skills_similarity = 0
 
+        print("Skills Similarity:", skills_similarity)  # Print skills similarity
         return skills_similarity
     
-
     def get_search_results(self,search_query):
         endpoint = f"https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&utf8=1&redirects=1&srprop=size&origin=*&srsearch={search_query}"
         response = requests.get(endpoint)
@@ -245,6 +245,7 @@ class Matching:
             if title:
                 return self.get_summary(title)
         return None
+        return results
     
     def get_summary(self,title):
         endpoint = f"https://en.wikipedia.org/w/api.php?action=query&prop=extracts&format=json&exsentences=5&explaintext=&origin=*&titles={title}"
@@ -255,261 +256,46 @@ class Matching:
             return result.get("extract", "")
         return None
     
-
-
     def match(self):
         resume_workedAs = self.resume.get("WORKED AS", [])
         resume_experience_list = self.resume.get("YEARS OF EXPERIENCE", [])
         resume_skills = self.resume.get("SKILLS", [])
 
         job_description_skills = self.job_description.get('SKILLS', [])
-        jd_experience_list = self.job_description.get('EXPERIENCE', [])
-        jd_post = self.job_description.get('JOBPOST', [])
+        job_description_titles = self.job_description.get('JOB_TITLE', [])
 
-        jd_experience = [self.calculate_experience([exp]) for exp in jd_experience_list]
-        resume_experience = [self.calculate_experience([exp]) for exp in resume_experience_list]
-
-        jdpost_similarity, experience_similarity = self.compare_job_titles(resume_workedAs, jd_post)
+        jdpost_similarity, experience_similarity = self.compare_job_titles(resume_workedAs, job_description_titles)
         skills_similarity = self.compare_skills(resume_skills, job_description_skills)
+        print(f"JD Post Similarity: {jdpost_similarity}")
+        print(f"Experience Similarity: {experience_similarity}")
+        print(f"Skills Similarity: {skills_similarity}")
+        
+        final_score = jdpost_similarity + experience_similarity + skills_similarity
+        final_score_percentage = round(final_score * 100, 2)
 
-        matching = (jdpost_similarity + experience_similarity + skills_similarity) * 100
-        matching = round(matching, 2)
-
-        print("Overall Similarity between resume and JD is", matching)
-        return matching
-
+        return final_score_percentage
+        print("Total Match Score:", final_score = jdpost_similarity + experience_similarity + skills_similarity)  # Print total match score
+        return final_score_percentage
 @app.route('/')
 def index():
-    if 'user_id' not in session:
-        flash('Please log in to continue', 'warning')
-        return redirect(url_for('login'))
+    resumes = resumeFetchedData.find()
+    jobs = JOBS.find()
 
-    # Fetch resumes and job descriptions from MongoDB
-    resumes = resumeFetchedData.find()  # Fetch all resumes
-    job_descriptions = JOBS.find()  # Fetch all job descriptions
+    return render_template('index.html', resumes=resumes, jobs=jobs)
 
-    # Convert MongoDB cursors to lists of dictionaries for easy access in the template
-    resumes = list(resumes)
-    job_descriptions = list(job_descriptions)
-
-    # Ensure that documents are properly formatted
-    print("Resumes:", resumes)
-    print("Job Descriptions:", job_descriptions)
-
-    return render_template('index.html', resumes=resumes, job_descriptions=job_descriptions)
-
-@app.route('/match', methods=['POST'])
-def match_route():
-    if 'user_id' not in session:
-        flash('Please log in to continue', 'warning')
-        return redirect(url_for('login'))
-    
-    resume_id = request.form.get('resume_id')
-    job_id = request.form.get('job_id')
-
-    if not resume_id or not job_id:
-        flash('Please select both a resume and a job description', 'warning')
-        return redirect(url_for('index'))
-
-    try:
-        # Fetch the selected resume and job description from the database
-        selected_resume = resumeFetchedData.find_one({'_id': ObjectId(resume_id)})
-        selected_job = JOBS.find_one({'_id': ObjectId(job_id)})
-
-        if not selected_resume or not selected_job:
-            flash('Invalid resume or job description selected', 'danger')
-            return redirect(url_for('index'))
-        
-        print("Selected Resume:", selected_resume)
-        print("Selected Job:", selected_job)
-
-
-        # Create an instance of Matching and calculate the score
-        matching = Matching(resume_id, job_id)
-        score = matching.match()
-
-        flash(f'Match score: {score}%', 'success')
-    except ValueError as e:
-        flash(str(e), 'danger')
-
-    return redirect(url_for('index'))
-
-
-    '''job_id = request.form['job_id']
-    resume = resumeFetchedData.find_one({"UserId": ObjectId(session['user_id'])}, sort=[('_id', -1)])
-
-    if not resume:
-        flash('Resume not found for the logged-in user', 'danger')
-        return redirect(url_for('index'))
-
-    try:
-        matching = Matching(str(resume['_id']), job_id)
-        score = matching.match()
-        flash(f'Match score: {score}%', 'success')
-    except ValueError as e:
-        flash(str(e), 'danger')
-
-    return redirect(url_for('index'))'''
-
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        user_name = request.form['user_name']
-        user_email = request.form['user_email']
-        
-        if users.find_one({'email': user_email}):
-            flash("User already exists", 'error')
-            return redirect(url_for('login'))
-        
-        result = users.insert_one({'name': user_name, 'email': user_email})
-        session['user_id'] = str(result.inserted_id)
-        flash("Registration successful. You are now logged in.", 'success')
-        return redirect(url_for('index'))
-
-    return render_template('register.html')
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        user_email = request.form['user_email']
-        user = users.find_one({'email': user_email})
-
-        if user:
-            session['user_id'] = str(user['_id'])
-            flash("Login successful", 'success')
-            return redirect(url_for('index'))
-        else:
-            flash("Invalid credentials", 'danger')
-
-    return render_template('login.html')
-
-@app.route('/logout')
-def logout():
-    session.pop('user_id', None)
-    flash('You have been logged out', 'info')
-    return redirect(url_for('login'))
-
-'''@app.route('/upload', methods=['POST'])
-def upload():
-    if 'user_id' not in session:
-        flash('Please log in to continue', 'warning')
-        return redirect(url_for('login'))
-
-    # Retrieve form data
-    resume_file = request.files.get('resume')
-    job_file = request.files.get('job_description_file')
-    job_text = request.form.get('job_description_text')
-    company_name = request.form.get('company_name')
-    salary = request.form.get('salary')
-    job_post = request.form.get('job_post')
-
-    # Debug print statements
-    print("Received resume file:", resume_file.filename if resume_file else "No resume file")
-    print("Received job file:", job_file.filename if job_file else "No job file")
-    print("Received job text:", job_text if job_text else "No job text")
-    
-    # Handle resume file upload
-    if resume_file and resume_file.filename.endswith('.pdf'):
-        resume_filename = secure_filename(resume_file.filename)
-        resume_path = os.path.join(app.config['UPLOAD_FOLDER_RESUME'], resume_filename)
-        resume_file.save(resume_path)
-        
-        with fitz.open(resume_path) as doc:
-            resume_text = ""
-            for page in doc:
-                resume_text += page.get_text()
-
-        resume_parser = ResumeModel(resume_model)
-        resume_data = resume_parser.parse_resume(resume_text)
-        resume_data["UserId"] = ObjectId(session['user_id'])
-        resumeFetchedData.insert_one(resume_data)
-        flash('Resume uploaded successfully', 'success')
-    else:
-        flash('Resume file not provided or not a PDF', 'warning')
-
-    # Initialize variables for job description
-    jd_text_parsed = None
-
-    # Handle job description file
-    if job_file and job_file.filename.endswith('.pdf'):
-        job_filename = secure_filename(job_file.filename)
-        job_path = os.path.join(app.config['UPLOAD_FOLDER_JOB'], job_filename)
-        job_file.save(job_path)
-        
-        with fitz.open(job_path) as doc:
-            jd_text = ""
-            for page in doc:
-                jd_text += page.get_text()
-        
-        jd_text_parsed = jd_text
-        flash('Job description file uploaded successfully', 'success')
-    elif job_text:
-    
-        # Process job description text
-        with io.BytesIO(job_text.encode('utf-8')) as data:
-            text_of_jd = ""
-            try:
-                doc = fitz.open(stream=data)
-                for page in doc:
-                    text_of_jd += page.get_text()
-            except Exception as e:
-                text_of_jd = job_text
-
-        label_list_jd = []
-        text_list_jd = []
-        dic_jd = {}
-
-        doc_jd = jd_model(text_of_jd)
-        for ent in doc_jd.ents:
-            label_list_jd.append(ent.label_)
-            text_list_jd.append(ent.text)
-
-        for i in range(len(label_list_jd)):
-            if label_list_jd[i] in dic_jd:
-                dic_jd[label_list_jd[i]].append(text_list_jd[i])
-            else:
-                dic_jd[label_list_jd[i]] = [text_list_jd[i]]
-
-        print("JD dictionary:", dic_jd)
-
-        jd_text_parsed = job_text
-        flash('Job description text received successfully', 'success')
-    else:
-        flash('Job description file or text not provided', 'warning')
-
-    # Process job description
-    if jd_text_parsed:
-        job_parser = JDModel(jd_model)
-        job_data = job_parser.parse_job_description(jd_text_parsed)
-        job_data.update({
-            'company_name': company_name,
-            'salary': salary,
-            'job_post': job_post,
-            'JobFile': job_file.read() if job_file else None
-        })
-        JOBS.insert_one(job_data)
-    else:
-        flash('No job description data to process', 'warning')
-
-    return redirect(url_for('index'))'''
 @app.route('/upload', methods=['POST'])
 def upload():
-    if 'user_id' not in session:
-        flash('Please log in to continue', 'warning')
-        return redirect(url_for('login'))
+    resume_file = request.files['resume']
+    job_file = request.files.get('job_description')
+    job_text = request.form.get('job_text')
 
-    # Retrieve form data
-    resume_file = request.files.get('resume')
-    job_file = request.files.get('job_description_file')
-    job_text = request.form.get('job_description_text')
-    company_name = request.form.get('company_name')
-    salary = request.form.get('salary')
-    job_post = request.form.get('job_post')
+    if not resume_file or not (job_file or job_text):
+        flash('Please upload both resume and job description', 'warning')
+        return redirect(url_for('index'))
 
-    # Handle resume file upload
     if resume_file and resume_file.filename.endswith('.pdf'):
-        resume_filename = secure_filename(resume_file.filename)
-        resume_path = os.path.join(app.config['UPLOAD_FOLDER_RESUME'], resume_filename)
+        filename = secure_filename(resume_file.filename)
+        resume_path = os.path.join(app.config['UPLOAD_FOLDER_RESUME'], filename)
         resume_file.save(resume_path)
         
         with fitz.open(resume_path) as doc:
@@ -518,75 +304,34 @@ def upload():
                 resume_text += page.get_text()
 
         resume_parser = ResumeModel(resume_model)
-        resume_data = resume_parser.parse_resume(resume_text)
-        resume_data["UserId"] = ObjectId(session['user_id'])
-        resumeFetchedData.insert_one(resume_data)
-        flash('Resume uploaded successfully', 'success')
-    else:
-        flash('Resume file not provided or not a PDF', 'warning')
+        resume_entities = resume_parser.parse_resume(resume_text)
+        resume_id = resumeFetchedData.insert_one(resume_entities).inserted_id
 
-    # Initialize variables for job description
-    jd_text_parsed = None
-    dic_jd = {}
-
-    # Handle job description file
-    if job_file and job_file.filename.endswith('.pdf'):
-        job_filename = secure_filename(job_file.filename)
-        job_path = os.path.join(app.config['UPLOAD_FOLDER_JOB'], job_filename)
-        job_file.save(job_path)
+    elif resume_file and resume_file.filename.endswith('.docx'):
+        filename = secure_filename(resume_file.filename)
+        resume_path = os.path.join(app.config['UPLOAD_FOLDER_RESUME'], filename)
+        resume_file.save(resume_path)
         
-        with fitz.open(job_path) as doc:
-            jd_text = ""
-            for page in doc:
-                jd_text += page.get_text()
-        
-        jd_text_parsed = jd_text
-        flash('Job description file uploaded successfully', 'success')
-    elif job_text:
-        # Process job description text directly
-        jd_text_parsed = job_text
-        flash('Job description text received successfully', 'success')
+        resume_text = docx2txt.process(resume_path)
+
+        resume_parser = ResumeModel(resume_model)
+        resume_entities = resume_parser.parse_resume(resume_text)
+        resume_id = resumeFetchedData.insert_one(resume_entities).inserted_id
+
     else:
-        flash('Job description file or text not provided', 'warning')
+        flash('Unsupported resume file format', 'danger')
+        return redirect(url_for('index'))
 
-    # Process the job description with spaCy model
-    if jd_text_parsed:
-        try:
-            doc_jd = jd_model(jd_text_parsed)
-            print("spaCy doc:", doc_jd)
-            print("Entities found:", [ent.text for ent in doc_jd.ents])
+    jd_parser = Matching(resume_id, None)
+    job_description = jd_parser.parse_job_description(job_file, job_text)
+    job_id = JOBS.insert_one(job_description).inserted_id
 
-            label_list_jd = []
-            text_list_jd = []
+    matching = Matching(resume_id, job_id)
+    match_score = matching.match()
+    print(f"Match Score: {match_score}")
 
-            for ent in doc_jd.ents:
-                label_list_jd.append(ent.label_)
-                text_list_jd.append(ent.text)
-                print(f"Entity: {ent.text}, Label: {ent.label_}")
-
-            for i in range(len(label_list_jd)):
-                if label_list_jd[i] in dic_jd:
-                    dic_jd[label_list_jd[i]].append(text_list_jd[i])
-                else:
-                    dic_jd[label_list_jd[i]] = [text_list_jd[i]]
-
-            print("JD dictionary:", dic_jd)
-        except Exception as e:
-            print(f"Exception during spaCy processing: {e}")
-
-        # Save job description data to MongoDB
-        dic_jd.update({
-            'company_name': company_name,
-            'salary': salary,
-            'job_post': job_post
-        })
-        JOBS.insert_one(dic_jd)
-        flash('Job description text processed and saved successfully', 'success')
-    else:
-        flash('No job description data to process', 'warning')
-
-    return redirect(url_for('index'))
-
+    return render_template('result.html', resume_entities=resume_entities, job_description=job_description, match_score=match_score)
 
 if __name__ == '__main__':
     app.run(debug=True)
+
