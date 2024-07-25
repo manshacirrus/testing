@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Job Postings</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Job Postings</h1>
+    
+    {% if errorMsg %}
+        <p style="color: red;">{{ errorMsg }}</p>
+    {% endif %}
+
+    <table>
+        <tr>
+            <th>Job Profile</th>
+            <th>Company Name</th>
+            <th>Created At</th>
+            <th>Job Description File</th>
+            <th>Last Date</th>
+            <th>Salary</th>
+        </tr>
+        {% for job in data.values() %}
+            <tr>
+                <td>{{ job.Job_Profile }}</td>
+                <td>{{ job.CompanyName }}</td>
+                <td>{{ job.CreatedAt.strftime('%Y-%m-%d') }}</td>
+                <td>{{ job.Job_description_file_name }}</td>
+                <td>{{ job.LastDate.strftime('%Y-%m-%d') }}</td>
+                <td>{{ job.Salary }}</td>
+            </tr>
+        {% endfor %}
+    </table>
+    
+    <a href="{{ url_for('job_post.home') }}">Back to Home</a>
+</body>
+</html>

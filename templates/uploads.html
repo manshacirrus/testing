@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Upload Files</h1>
+    </header>
+
+    <main>
+        <form action="{{ url_for('index') }}" method="POST" enctype="multipart/form-data">
+            <label for="upload">Upload Resume:</label>
+            <input type="file" name="upload_resume" id="upload_resume" required><br>
+
+            <label for="job_file">Upload Job Description File:</label>
+            <input type="file" name="job_file" id="job_file" required><br>
+
+            <button type="submit">Upload</button>
+        </form>
+    </main>
+</body>
+</html>
