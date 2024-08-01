@@ -22,7 +22,6 @@ This is a Flask-based web application designed for resume screening and job desc
 - **docx2txt**: Library for extracting text from DOCX files.
 
 
-
 ### Prerequisites
 
 - Python 3.10 or higher
