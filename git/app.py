@@ -1,5 +1,3 @@
-from flask import Flask, request, render_template, redirect, url_for, flash, session
-from werkzeug.utils import secure_filename
 import os
 import io
 import fitz  # PyMuPDF
@@ -7,18 +5,19 @@ from flask_pymongo import PyMongo
 import docx2txt
 import spacy
 from bson import ObjectId
-from MediaWiki import get_search_results
+#from mediawiki import MediaWiki
+#from MediaWiki import get_search_results
 import re
 import requests
+import torch
+app = Flask(__name__, template_folder=/path/to/template')
 
-app = Flask(__name__)
 app.secret_key = 'Resumescreening'
 
 # MongoDB client setup
 app.config['MONGO_URI'] = 'mongodb+srv://admin:admin@cluster0.na6om9v.mongodb.net/Project0'
 mongo = PyMongo(app)
 
-# Initialize MongoDB collections
 resumeFetchedData = mongo.db.resumeFetchedData
 JOBS = mongo.db.JOBS
 users = mongo.db.IRS_USERS  # Collection for user management
