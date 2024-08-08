@@ -2,15 +2,19 @@ import os
 import io
 import fitz  # PyMuPDF
 from flask_pymongo import PyMongo
+from flask import Flask, render_template
 import docx2txt
 import spacy
 from bson import ObjectId
+from flask import Flask, request, render_template, redirect, url_for
+from werkzeug.utils import secure_filename
+
 #from mediawiki import MediaWiki
 #from MediaWiki import get_search_results
 import re
 import requests
 import torch
-app = Flask(__name__, template_folder=/path/to/template')
+app = Flask(__name__, template_folder=r'C:/Users/Mansha/Documents/new/testing/templates')
 
 app.secret_key = 'Resumescreening'
 
