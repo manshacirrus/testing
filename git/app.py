@@ -14,7 +14,7 @@ from werkzeug.utils import secure_filename
 import re
 import requests
 import torch
-app = Flask(__name__, template_folder=r'C:/Users/Mansha/Documents/new/testing/templates')
+app = Flask(__name__, template_folder=r'./templates')
 
 app.secret_key = 'Resumescreening'
 
